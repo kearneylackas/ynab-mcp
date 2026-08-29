@@ -11,10 +11,16 @@ This repo is both things at once: the plugin manifest (`.claude-plugin/`,
 `.mcp.json`) and the Python package source (`src/ynab_mcp/`) that manifest
 launches.
 
-## Installing as a Claude plugin (recommended)
+## Installing
 
-1. Add this repo as a marketplace (it self-hosts via
-   `.claude-plugin/marketplace.json`), then install the plugin from it:
+This repo doubles as a self-hosting Claude plugin marketplace
+(`.claude-plugin/marketplace.json`) and as a plain Python package. Which
+install path applies depends on which Claude surface you're using — they
+don't all support the plugin system the same way.
+
+### Claude Code
+
+1. Add this repo as a marketplace, then install the plugin from it:
    ```
    /plugin marketplace add /path/to/ynab-mcp
    /plugin install ynab@ynab-mcp
@@ -26,26 +32,69 @@ launches.
    resolves and runs the package on first use with no separate install
    step. `${CLAUDE_PLUGIN_ROOT}` is filled in automatically wherever the
    plugin ends up installed — no path to edit.
-3. Set two **system environment variables** on that machine (not in the
-   plugin — `.mcp.json` reads them via `${YNAB_ACCESS_TOKEN}` /
-   `${YNAB_DEFAULT_BUDGET_ID}` at connect time):
-   - `YNAB_ACCESS_TOKEN` — from https://app.ynab.com/settings/developer
-   - `YNAB_DEFAULT_BUDGET_ID` — optional, pins a specific budget (ask
-     Claude to run `list_budgets` to get the id). Without it, tools
-     default to YNAB's "last-used" budget, which can silently point at a
-     different budget if another one was opened more recently in the app.
+3. Set the environment variables below.
 
-   On Windows (Command Prompt, one-time):
-   ```
-   setx YNAB_ACCESS_TOKEN "your_token_here"
-   setx YNAB_DEFAULT_BUDGET_ID "your_budget_id_here"
-   ```
-   Restart Claude/your terminal after running these — `setx` doesn't
-   affect already-open processes.
+### Claude Cowork
 
-No credentials are stored in the plugin itself — the `${...}` syntax pulls
-from your own machine's environment at connect time, not from any value
-baked into `.mcp.json`.
+Cowork shares Claude Code's plugin infrastructure, just through a GUI
+instead of `/plugin`:
+
+1. **Customize → Plugins → Add marketplace**, pointing at this repo on
+   GitHub (`kearneylackas/ynab-mcp`).
+2. Install the `ynab` plugin from that marketplace on the same screen.
+3. Set the environment variables below on the machine running Cowork.
+   `${CLAUDE_PLUGIN_ROOT}` support isn't explicitly documented for Cowork,
+   but it shares Code's plugin loader so it's expected to resolve the same
+   way — if the server fails to connect, that's the first thing to check.
+
+### Claude Desktop
+
+Desktop does **not** support the plugin/marketplace system at all — no
+`.claude-plugin/`, no `/plugin` commands. It only reads a flat MCP server
+list, and it does not reliably expand `${CLAUDE_PLUGIN_ROOT}` or
+`${YNAB_ACCESS_TOKEN}`-style variables — those have to be literal values
+here, unlike Code/Cowork.
+
+1. Open `%APPDATA%\Claude\claude_desktop_config.json` (or Settings →
+   Developer → Edit Config in the app).
+2. Add:
+   ```json
+   {
+     "mcpServers": {
+       "ynab": {
+         "command": "uv",
+         "args": ["--directory", "C:\\path\\to\\ynab-mcp", "run", "ynab-mcp"],
+         "env": {
+           "YNAB_ACCESS_TOKEN": "your_actual_token_here",
+           "YNAB_DEFAULT_BUDGET_ID": "your_actual_budget_id_here"
+         }
+       }
+     }
+   }
+   ```
+   Note the literal values, not `${...}` references — Desktop doesn't pull
+   those from the system environment the way the plugin loader does.
+3. Restart Desktop.
+
+### Environment variables (Claude Code / Cowork)
+
+`.mcp.json` reads these from the host machine's environment at connect
+time via `${YNAB_ACCESS_TOKEN}` / `${YNAB_DEFAULT_BUDGET_ID}` — nothing
+sensitive is baked into the plugin itself:
+
+- `YNAB_ACCESS_TOKEN` — from https://app.ynab.com/settings/developer
+- `YNAB_DEFAULT_BUDGET_ID` — optional, pins a specific budget (ask
+  Claude to run `list_budgets` to get the id). Without it, tools
+  default to YNAB's "last-used" budget, which can silently point at a
+  different budget if another one was opened more recently in the app.
+
+On Windows (Command Prompt, one-time):
+```
+setx YNAB_ACCESS_TOKEN "your_token_here"
+setx YNAB_DEFAULT_BUDGET_ID "your_budget_id_here"
+```
+Restart Claude/your terminal after running these — `setx` doesn't affect
+already-open processes.
 
 ## Running/installing the server standalone (for development or testing)
 
@@ -68,22 +117,9 @@ uv sync
 # or: pip install -e .
 ```
 
-Then a manual (non-plugin) MCP client config would look like:
-
-```json
-{
-  "mcpServers": {
-    "ynab": {
-      "command": "uv",
-      "args": ["--directory", "C:\\path\\to\\ynab-mcp", "run", "ynab-mcp"],
-      "env": {
-        "YNAB_ACCESS_TOKEN": "your_token_here",
-        "YNAB_DEFAULT_BUDGET_ID": "your_budget_id_here"
-      }
-    }
-  }
-}
-```
+(For a manual, non-plugin MCP client config, see the Claude Desktop section
+above — same shape applies to any client that reads a flat `mcpServers`
+list.)
 
 ## Tools
 
