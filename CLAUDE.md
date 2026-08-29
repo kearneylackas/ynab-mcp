@@ -9,6 +9,11 @@ YNAB's REST API (`api.ynab.com/v1`) — no third-party MCP wrapper. See
 This repo is both the plugin source and the Python package it launches:
 
 - `.claude-plugin/plugin.json` — plugin manifest (name, version, description).
+- `.claude-plugin/marketplace.json` — lets this repo self-host as its own
+  single-plugin marketplace (`source: "./"`). Claude Code has no
+  install-a-bare-plugin path — every install goes through a marketplace,
+  even a self-referencing one — so this file is required, not optional:
+  `/plugin marketplace add <this-repo>` then `/plugin install ynab@ynab-mcp`.
 - `.mcp.json` — MCP server definition. Uses `${CLAUDE_PLUGIN_ROOT}` for the
   server directory (never a hardcoded path) and `${YNAB_ACCESS_TOKEN}` /
   `${YNAB_DEFAULT_BUDGET_ID}` for credentials, pulled from the host

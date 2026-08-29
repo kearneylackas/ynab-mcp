@@ -13,8 +13,14 @@ launches.
 
 ## Installing as a Claude plugin (recommended)
 
-1. Point Claude at this repo as a plugin source (e.g. via a marketplace
-   entry, or a local path during development).
+1. Add this repo as a marketplace (it self-hosts via
+   `.claude-plugin/marketplace.json`), then install the plugin from it:
+   ```
+   /plugin marketplace add /path/to/ynab-mcp
+   /plugin install ynab@ynab-mcp
+   ```
+   (Claude Code has no bare "install a single plugin" path — every plugin
+   install goes through a marketplace, even a self-referencing one.)
 2. `uv` needs to be installed on the machine running Claude — `.mcp.json`
    uses `uv --directory ${CLAUDE_PLUGIN_ROOT} run ynab-mcp`, so `uv`
    resolves and runs the package on first use with no separate install
