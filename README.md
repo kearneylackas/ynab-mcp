@@ -25,8 +25,9 @@ don't all support the plugin system the same way.
    /plugin marketplace add /path/to/ynab-mcp
    /plugin install ynab@ynab-mcp
    ```
-   (Claude Code has no bare "install a single plugin" path — every plugin
-   install goes through a marketplace, even a self-referencing one.)
+   (`/plugin install` always resolves through a marketplace, hence the
+   self-referencing one above. To try the plugin without installing it,
+   `claude --plugin-dir /path/to/ynab-mcp` loads it for a single session.)
 2. `uv` needs to be installed on the machine running Claude — `.mcp.json`
    uses `uv --directory ${CLAUDE_PLUGIN_ROOT} run ynab-mcp`, so `uv`
    resolves and runs the package on first use with no separate install
@@ -95,6 +96,18 @@ setx YNAB_DEFAULT_BUDGET_ID "your_budget_id_here"
 ```
 Restart Claude/your terminal after running these — `setx` doesn't affect
 already-open processes.
+
+### If you cloned this repo and see a `ynab` connection error
+
+Opening this repository itself as a project in Claude Code will report the
+`ynab` MCP server failing to connect, whether or not you installed the
+plugin. That's expected. `.mcp.json` sits at the repo root, so Claude Code
+also reads it as a *project*-scoped server and tries to launch it outside
+the plugin loader — where `${CLAUDE_PLUGIN_ROOT}` is undefined and (unless
+you've set it) there's no `YNAB_ACCESS_TOKEN` either, so the server exits
+immediately. It says nothing about whether the installed plugin works. Set
+the environment variables above if you want it to connect while you work on
+the repo.
 
 ## Running/installing the server standalone (for development or testing)
 

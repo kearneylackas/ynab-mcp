@@ -1,5 +1,6 @@
 {
   "name": "ynab-mcp",
+  "description": "Self-hosting marketplace for the ynab plugin: a local stdio MCP server for YNAB.",
   "owner": {
     "name": "Kearney Lackas"
   },

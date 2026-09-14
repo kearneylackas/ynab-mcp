@@ -8,16 +8,25 @@ YNAB's REST API (`api.ynab.com/v1`) — no third-party MCP wrapper. See
 
 This repo is both the plugin source and the Python package it launches:
 
-- `.claude-plugin/plugin.json` — plugin manifest (name, version, description).
+- `.claude-plugin/plugin.json` — plugin manifest (name, version,
+  description, author, license, homepage, repository).
 - `.claude-plugin/marketplace.json` — lets this repo self-host as its own
-  single-plugin marketplace (`source: "./"`). Claude Code has no
-  install-a-bare-plugin path — every install goes through a marketplace,
-  even a self-referencing one — so this file is required, not optional:
-  `/plugin marketplace add <this-repo>` then `/plugin install ynab@ynab-mcp`.
+  single-plugin marketplace (`source: "./"`), which is what `/plugin
+  install` needs: `/plugin marketplace add <this-repo>` then
+  `/plugin install ynab@ynab-mcp`. It is not the only way in — `claude
+  --plugin-dir <dir-or-zip>` and `claude --plugin-url <zip-url>` load a
+  plugin with no marketplace at all, which is how to test a change
+  locally. Keep this file for distribution, but don't describe a
+  marketplace as the only install path.
 - `.mcp.json` — MCP server definition. Uses `${CLAUDE_PLUGIN_ROOT}` for the
   server directory (never a hardcoded path) and `${YNAB_ACCESS_TOKEN}` /
   `${YNAB_DEFAULT_BUDGET_ID}` for credentials, pulled from the host
   machine's environment at connect time — nothing sensitive is baked in.
+  Note this file does double duty: Claude Code also reads a root
+  `.mcp.json` as a *project*-scoped server, so just opening this repo as a
+  project tries to launch the server — outside the plugin loader, where
+  `${CLAUDE_PLUGIN_ROOT}` is undefined. Expect a connection error in that
+  case; it says nothing about whether the installed plugin works.
 - `src/ynab_mcp/server.py` — the whole server: `YnabClient` (thin async
   HTTP wrapper over `httpx`) plus one `@mcp.tool()` function per tool,
   registered via `fastmcp`. This is the only file that matters for

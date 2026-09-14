@@ -1,8 +1,11 @@
 {
   "name": "ynab",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Connects Claude to a self-built local YNAB MCP server (budgets, accounts, categories, transactions, split transactions - read and write).",
   "author": {
     "name": "Kearney Lackas"
-  }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/kearneylackas/ynab-mcp#readme",
+  "repository": "https://github.com/kearneylackas/ynab-mcp"
 }
