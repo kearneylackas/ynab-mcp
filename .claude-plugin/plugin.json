@@ -1,6 +1,6 @@
 {
   "name": "ynab",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Connects Claude to a self-built local YNAB MCP server (budgets, accounts, categories, transactions, split transactions - read and write).",
   "author": {
     "name": "Kearney Lackas"
