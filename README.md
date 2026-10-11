@@ -35,6 +35,36 @@ don't all support the plugin system the same way.
    plugin ends up installed — no path to edit.
 3. Set the environment variables below.
 
+### Claude Code cloud sessions (web, phone)
+
+Cloud sessions don't install plugins declared through a project's
+`extraKnownMarketplaces`/`enabledPlugins`. Instead, declare the server as a
+project MCP server in the repo you open, `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ynab": {
+      "command": "uvx",
+      "args": ["--quiet", "--from",
+               "git+https://github.com/kearneylackas/ynab-mcp@main", "ynab-mcp"],
+      "env": {
+        "YNAB_ACCESS_TOKEN": "${YNAB_ACCESS_TOKEN:-}",
+        "YNAB_DEFAULT_BUDGET_ID": "${YNAB_DEFAULT_BUDGET_ID:-last-used}"
+      }
+    }
+  }
+}
+```
+
+and approve it in that repo's `.claude/settings.json` with
+`"enabledMcpjsonServers": ["ynab"]`. Set both variables in the cloud
+environment's settings and allow `api.ynab.com` in its network policy. The
+Claude GitHub App must have access to this repo so `uvx` can fetch it. Attach
+only that one repo to the session: with several attached, the session starts
+in their parent directory and no project `.mcp.json` is read. Tools are then
+named `mcp__ynab__*`.
+
 ### Claude Cowork
 
 Cowork shares Claude Code's plugin infrastructure, just through a GUI
@@ -80,8 +110,9 @@ here, unlike Code/Cowork.
 ### Environment variables (Claude Code / Cowork)
 
 `.mcp.json` reads these from the host machine's environment at connect
-time via `${YNAB_ACCESS_TOKEN}` / `${YNAB_DEFAULT_BUDGET_ID}` — nothing
-sensitive is baked into the plugin itself:
+time via `${YNAB_ACCESS_TOKEN:-}` / `${YNAB_DEFAULT_BUDGET_ID:-last-used}` —
+nothing sensitive is baked into the plugin itself. Keep the `:-` defaults:
+Claude Code passes an unset plain `${VAR}` through as the literal text.
 
 - `YNAB_ACCESS_TOKEN` — from https://app.ynab.com/settings/developer
 - `YNAB_DEFAULT_BUDGET_ID` — optional, pins a specific budget (ask
@@ -104,8 +135,7 @@ Opening this repository itself as a project in Claude Code will report the
 plugin. That's expected. `.mcp.json` sits at the repo root, so Claude Code
 also reads it as a *project*-scoped server and tries to launch it outside
 the plugin loader — where `${CLAUDE_PLUGIN_ROOT}` is undefined and (unless
-you've set it) there's no `YNAB_ACCESS_TOKEN` either, so the server exits
-immediately. It says nothing about whether the installed plugin works. Set
+you've set it) there's no `YNAB_ACCESS_TOKEN` either. It says nothing about whether the installed plugin works. Set
 the environment variables above if you want it to connect while you work on
 the repo.
 

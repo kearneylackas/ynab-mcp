@@ -20,7 +20,10 @@ This repo is both the plugin source and the Python package it launches:
   marketplace as the only install path.
 - `.mcp.json` — MCP server definition. Uses `${CLAUDE_PLUGIN_ROOT}` for the
   server directory (never a hardcoded path) and `${YNAB_ACCESS_TOKEN}` /
-  `${YNAB_DEFAULT_BUDGET_ID}` for credentials, pulled from the host
+  `${YNAB_DEFAULT_BUDGET_ID}` for credentials, always with `:-` defaults
+  (`${YNAB_ACCESS_TOKEN:-}`, `${YNAB_DEFAULT_BUDGET_ID:-last-used}`):
+  Claude Code passes an unset plain `${VAR}` to the server as literal text,
+  which once made every budget call 404, pulled from the host
   machine's environment at connect time — nothing sensitive is baked in.
   Note this file does double duty: Claude Code also reads a root
   `.mcp.json` as a *project*-scoped server, so just opening this repo as a
@@ -40,6 +43,14 @@ This repo is both the plugin source and the Python package it launches:
 Bump `.claude-plugin/plugin.json`'s `version` when shipping a change meant
 for distribution (e.g. rebuilding a `.plugin` zip) — nothing does this
 automatically.
+
+**Cloud sessions don't use the plugin.** Claude Code cloud sessions never
+install a plugin declared via a project's `extraKnownMarketplaces`/
+`enabledPlugins` (verified 2026-10-11). The consuming repo
+(`personal-finance`) instead declares a project MCP server running
+`uvx --from git+https://github.com/kearneylackas/ynab-mcp@main ynab-mcp`, so
+**whatever is on `main` is what cloud sessions run**. Keep `main` working.
+README § "Claude Code cloud sessions" has the config.
 
 ## Conventions specific to this server
 

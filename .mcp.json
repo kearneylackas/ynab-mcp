@@ -9,8 +9,8 @@
         "ynab-mcp"
       ],
       "env": {
-        "YNAB_ACCESS_TOKEN": "${YNAB_ACCESS_TOKEN}",
-        "YNAB_DEFAULT_BUDGET_ID": "${YNAB_DEFAULT_BUDGET_ID}"
+        "YNAB_ACCESS_TOKEN": "${YNAB_ACCESS_TOKEN:-}",
+        "YNAB_DEFAULT_BUDGET_ID": "${YNAB_DEFAULT_BUDGET_ID:-last-used}"
       }
     }
   }
