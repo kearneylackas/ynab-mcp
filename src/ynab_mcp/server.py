@@ -4,8 +4,9 @@ Custom YNAB MCP server.
 Talks directly to YNAB's REST API (https://api.ynab.com/v1) rather than
 wrapping a third-party SDK or MCP project, so there's nothing here beyond
 what this file does. Read + write scope: can view budgets/accounts/
-categories/transactions/month summaries, and create transactions (including
-splits), approve/edit them, and assign money to categories.
+categories (with their targets)/transactions/month summaries, create
+transactions (including splits), approve/edit them, assign money to
+categories, set or remove category targets, and create categories.
 
 Runs over stdio — this is a local process your MCP client (Claude Desktop,
 Claude Code, Cowork) launches itself and talks to directly, not a hosted
@@ -83,6 +84,87 @@ def _summarize_transaction(t: dict) -> dict:
     return summary
 
 
+# Goal (target) fields returned by YNAB in milliunits; everything else in
+# _GOAL_FIELDS passes through unchanged.
+_GOAL_MONEY_FIELDS = (
+    "goal_target",
+    "goal_under_funded",
+    "goal_overall_funded",
+    "goal_overall_left",
+)
+_GOAL_FIELDS = (
+    "goal_type",
+    "goal_target",
+    "goal_target_date",
+    "goal_needs_whole_amount",
+    "goal_cadence",
+    "goal_cadence_frequency",
+    "goal_day",
+    "goal_under_funded",
+    "goal_overall_funded",
+    "goal_overall_left",
+    "goal_percentage_complete",
+    "goal_months_to_budget",
+    "goal_snoozed_at",
+)
+
+
+def _summarize_category(cat: dict, group_name: Optional[str] = None) -> dict:
+    """Dollar-denominated view of a YNAB category. Goal fields are included
+    only when the category has a target (goal_type is set), to keep
+    target-less categories compact."""
+    summary = {
+        "id": cat.get("id"),
+        "name": cat.get("name"),
+        "category_group": group_name or cat.get("category_group_name"),
+        "category_group_id": cat.get("category_group_id"),
+        "budgeted": _from_milliunits(cat.get("budgeted", 0)),
+        "activity": _from_milliunits(cat.get("activity", 0)),
+        "balance": _from_milliunits(cat.get("balance", 0)),
+    }
+    if cat.get("hidden"):
+        summary["hidden"] = True
+    if cat.get("goal_type"):
+        for field in _GOAL_FIELDS:
+            value = cat.get(field)
+            if field in _GOAL_MONEY_FIELDS and value is not None:
+                value = _from_milliunits(value)
+            summary[field] = value
+    return summary
+
+
+_GOAL_FREQUENCIES = ("monthly", "weekly", "yearly")
+
+
+def _goal_body(
+    target_amount: Optional[float],
+    frequency: Optional[str],
+    target_date: Optional[str],
+    needs_whole_amount: Optional[bool],
+) -> dict:
+    """Build the goal_* part of a category create/update body. Validates
+    the combinations YNAB rejects, so the caller gets a clear message
+    instead of a raw 400."""
+    if target_amount is None:
+        if frequency or target_date or needs_whole_amount is not None:
+            raise ValueError(
+                "frequency, target_date and needs_whole_amount require target_amount."
+            )
+        return {}
+    if frequency and target_date:
+        raise ValueError("Pass frequency or target_date, not both.")
+    if frequency and frequency not in _GOAL_FREQUENCIES:
+        raise ValueError(f"frequency must be one of {', '.join(_GOAL_FREQUENCIES)}.")
+    body: dict[str, Any] = {"goal_target": _to_milliunits(target_amount)}
+    if frequency:
+        body["goal_frequency"] = frequency
+    if target_date:
+        body["goal_target_date"] = target_date
+    if needs_whole_amount is not None:
+        body["goal_needs_whole_amount"] = needs_whole_amount
+    return body
+
+
 MISSING_TOKEN_MESSAGE = (
     "YNAB_ACCESS_TOKEN is not set in the environment this server was launched "
     "from. In a Claude Code cloud session, add it as an environment variable "
@@ -155,27 +237,33 @@ def create_server() -> FastMCP:
         ]
 
     @mcp.tool()
-    async def list_categories(budget_id: str = default_budget) -> list[dict]:
+    async def list_categories(
+        include_hidden: bool = False, budget_id: str = default_budget
+    ) -> list[dict]:
         """List budget categories grouped by category group, with budgeted,
-        activity, and balance amounts in dollars for the current month."""
+        activity, and balance amounts in dollars for the current month.
+
+        Categories with a target (YNAB goal) also carry goal_* fields:
+        goal_type (NEED, MF, TB, TBD, DEBT), goal_target, goal_under_funded
+        (still needed this month to stay on track — the number to fund to),
+        goal_overall_left, goal_percentage_complete, goal_target_date,
+        goal_needs_whole_amount (true = "set aside another", false = "refill
+        up to"), and the cadence fields. Money fields are dollars.
+
+        Hidden categories (and hidden groups) are skipped unless
+        include_hidden is true; those that are returned carry hidden: true."""
         data = await ynab.request("GET", f"/budgets/{budget_id}/categories")
         result = []
         for group in data.get("category_groups", []):
-            if group.get("deleted") or group.get("hidden"):
+            if group.get("deleted") or (group.get("hidden") and not include_hidden):
                 continue
             for cat in group.get("categories", []):
-                if cat.get("deleted") or cat.get("hidden"):
+                if cat.get("deleted") or (cat.get("hidden") and not include_hidden):
                     continue
-                result.append(
-                    {
-                        "id": cat["id"],
-                        "name": cat["name"],
-                        "category_group": group["name"],
-                        "budgeted": _from_milliunits(cat["budgeted"]),
-                        "activity": _from_milliunits(cat["activity"]),
-                        "balance": _from_milliunits(cat["balance"]),
-                    }
-                )
+                summary = _summarize_category(cat, group["name"])
+                if group.get("hidden"):
+                    summary["hidden"] = True
+                result.append(summary)
         return result
 
     @mcp.tool()
@@ -389,14 +477,87 @@ def create_server() -> FastMCP:
             f"/budgets/{budget_id}/months/{month}/categories/{category_id}",
             json=body,
         )
-        cat = data.get("category", {})
-        return {
-            "id": cat.get("id"),
-            "name": cat.get("name"),
-            "budgeted": _from_milliunits(cat.get("budgeted", 0)),
-            "activity": _from_milliunits(cat.get("activity", 0)),
-            "balance": _from_milliunits(cat.get("balance", 0)),
-        }
+        return _summarize_category(data.get("category", {}))
+
+    @mcp.tool()
+    async def set_category_target(
+        category_id: str,
+        target_amount: Optional[float] = None,
+        frequency: Optional[str] = None,
+        target_date: Optional[str] = None,
+        needs_whole_amount: Optional[bool] = None,
+        remove_target: bool = False,
+        budget_id: str = default_budget,
+    ) -> dict:
+        """Create, change, or remove a category's target (YNAB goal).
+
+        target_amount is in dollars. If the category has no target yet, YNAB
+        creates a monthly one ("NEED"; "MF" for credit-card payment
+        categories, "DEBT" for loan-paired ones).
+
+        frequency: "monthly", "weekly" or "yearly" — sets a recurring target
+        of target_amount at that cadence, replacing any existing target.
+        Omit it to keep an existing target's cadence and just change the
+        amount. Can't be combined with target_date.
+
+        target_date: YYYY-MM-DD, for a "by date" target.
+
+        needs_whole_amount: true = "Set aside another $X" each period, false
+        = "Refill up to $X". Only for NEED targets; not for credit-card
+        payment or loan categories.
+
+        remove_target=True deletes the target (pass no other target
+        arguments).
+
+        Example — $75/month, set aside fresh each month:
+            set_category_target(category_id, 75, frequency="monthly",
+                                needs_whole_amount=True)"""
+        if remove_target:
+            if target_amount is not None or frequency or target_date or needs_whole_amount is not None:
+                raise ValueError("remove_target=True takes no other target arguments.")
+            body: dict[str, Any] = {"goal_target": None}
+        else:
+            if target_amount is None:
+                raise ValueError("Pass target_amount, or remove_target=True.")
+            body = _goal_body(target_amount, frequency, target_date, needs_whole_amount)
+        data = await ynab.request(
+            "PATCH",
+            f"/budgets/{budget_id}/categories/{category_id}",
+            json={"category": body},
+        )
+        return _summarize_category(data.get("category", {}))
+
+    @mcp.tool()
+    async def create_category(
+        name: str,
+        category_group_id: str,
+        note: Optional[str] = None,
+        target_amount: Optional[float] = None,
+        target_frequency: Optional[str] = None,
+        target_date: Optional[str] = None,
+        needs_whole_amount: Optional[bool] = None,
+        budget_id: str = default_budget,
+    ) -> dict:
+        """Create a new category in an existing category group.
+
+        category_group_id comes from list_categories (every category carries
+        its group's id). Internal groups (e.g. Credit Card Payments) can't
+        be used.
+
+        Optionally give it a target in the same call: target_amount (dollars)
+        plus the same target_frequency / target_date / needs_whole_amount
+        options as set_category_target. With target_amount alone YNAB makes
+        a monthly target."""
+        body: dict[str, Any] = {"name": name, "category_group_id": category_group_id}
+        if note is not None:
+            body["note"] = note
+        body.update(_goal_body(target_amount, target_frequency, target_date, needs_whole_amount))
+        data = await ynab.request(
+            "POST",
+            f"/budgets/{budget_id}/categories",
+            json={"category": body},
+        )
+        return _summarize_category(data.get("category", {}))
 
     return mcp
 
