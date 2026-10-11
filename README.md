@@ -166,9 +166,12 @@ list.)
 
 ## Tools
 
-10 tools, read and write:
+12 tools, read and write:
 
-- `list_budgets`, `list_accounts`, `list_categories`, `get_month`
+- `list_budgets`, `list_accounts`, `get_month`
+- `list_categories` (includes each category's target/goal fields when it
+  has one, e.g. `goal_under_funded`; `include_hidden=True` adds hidden
+  categories)
 - `get_unapproved_transactions`, `list_transactions`
 - `create_transaction` (supports splits via `subtransactions`, and
   `import_id` for safe retries)
@@ -176,6 +179,9 @@ list.)
 - `update_transaction` (can also convert an existing transaction into a
   split via `subtransactions`)
 - `assign_to_category`
+- `set_category_target` (create, change, or remove a category's target —
+  e.g. $75/month "set aside another")
+- `create_category` (in an existing group, optionally with a target)
 
 `delete_transaction` is intentionally disabled (commented out in
 `src/ynab_mcp/server.py`).
@@ -184,7 +190,8 @@ All amounts are plain dollars in and out (e.g. `12.34`), converted to
 YNAB's internal milliunits automatically.
 
 **Heads up:** this server has real write access to your budget —
-`create_transaction`, `approve_transaction`, `update_transaction`, and
-`assign_to_category` all make real changes. Treat any tool call that
+`create_transaction`, `approve_transaction`, `update_transaction`,
+`assign_to_category`, `set_category_target`, and `create_category` all make
+real changes. Treat any tool call that
 touches a transaction or category budget the same as you would a real
 financial edit, because it is one.

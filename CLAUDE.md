@@ -94,3 +94,6 @@ this directory) rather than typing into it directly.
 - `update_transaction`'s support for converting a transaction to a split
   via `subtransactions` is implemented but explicitly noted in its own
   docstring as unverified against YNAB's actual API behavior.
+- `create_category` is built to YNAB's OpenAPI spec (v1.87.0) but hasn't
+  been exercised against the live API yet. `set_category_target` and the
+  goal fields in `list_categories` were verified live on 2026-10-11.
