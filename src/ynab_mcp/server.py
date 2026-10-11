@@ -83,8 +83,16 @@ def _summarize_transaction(t: dict) -> dict:
     return summary
 
 
+MISSING_TOKEN_MESSAGE = (
+    "YNAB_ACCESS_TOKEN is not set in the environment this server was launched "
+    "from. In a Claude Code cloud session, add it as an environment variable "
+    "in the cloud environment's settings and start a new session."
+)
+
+
 class YnabClient:
     def __init__(self, token: str) -> None:
+        self._has_token = bool(token)
         self._client = httpx.AsyncClient(
             base_url=YNAB_BASE_URL,
             headers={"Authorization": f"Bearer {token}"},
@@ -92,6 +100,8 @@ class YnabClient:
         )
 
     async def request(self, method: str, path: str, **kwargs) -> dict:
+        if not self._has_token:
+            raise RuntimeError(MISSING_TOKEN_MESSAGE)
         resp = await self._client.request(method, path, **kwargs)
         if resp.status_code >= 400:
             raise RuntimeError(
@@ -105,14 +115,16 @@ class YnabClient:
 def create_server() -> FastMCP:
     token = os.environ.get("YNAB_ACCESS_TOKEN", "")
     if not token:
-        log.error("YNAB_ACCESS_TOKEN is required.")
-        sys.exit(1)
+        # Start anyway so the client sees the tools and every call returns
+        # MISSING_TOKEN_MESSAGE. Exiting here surfaces only as an opaque
+        # CONNECTION_CLOSED, with nothing saying why.
+        log.error(MISSING_TOKEN_MESSAGE)
 
     # "last-used" tracks whatever budget was last opened in the YNAB app or
     # web UI, which drifts if you ever browse a different budget there. Set
     # YNAB_DEFAULT_BUDGET_ID (get the id from list_budgets) to pin a specific
     # budget instead, if you have more than one.
-    default_budget = os.environ.get("YNAB_DEFAULT_BUDGET_ID", "last-used")
+    default_budget = os.environ.get("YNAB_DEFAULT_BUDGET_ID") or "last-used"
 
     ynab = YnabClient(token)
     mcp = FastMCP("ynab-mcp")
